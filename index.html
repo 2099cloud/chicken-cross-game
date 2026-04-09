@@ -2,44 +2,84 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>小雞過馬路 - 網頁版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>小雞過馬路 - 手機橫向版</title>
     <style>
         body {
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
             background-color: #87CEEB; /* 天空藍背景 */
             font-family: '微軟正黑體', sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 0;
+            height: 100vh;
+            touch-action: none; /* 防止手機瀏覽器預設的滑動行為 */
+            overflow: hidden;
         }
-        h1 {
-            color: #333;
-            text-shadow: 2px 2px white;
-        }
+        /* 遊戲畫布自適應設定 */
         canvas {
             background-color: #7CFC00; /* 草地綠背景 */
             box-shadow: 0px 5px 15px rgba(0,0,0,0.5);
-            border-radius: 10px;
             border: 4px solid #fff;
+            border-radius: 10px;
+            width: 100%;
+            max-width: 800px; /* 最大寬度限制 */
+            max-height: 60vh; /* 預留空間給下方的按鈕 */
+            object-fit: contain;
         }
-        .instructions {
+        /* 手機版控制按鍵區塊 */
+        #mobile-controls {
             margin-top: 15px;
-            background-color: rgba(255, 255, 255, 0.8);
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: bold;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            user-select: none; /* 防止長按選取文字 */
+        }
+        .btn-row {
+            display: flex;
+            gap: 15px;
+        }
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            font-size: 28px;
+            border-radius: 15px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 3px solid #333;
+            box-shadow: 0px 4px 0px #333;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: manipulation;
+        }
+        .control-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0px 0px 0px #333;
+            background-color: #e0e0e0;
+        }
+        /* 在電腦大螢幕上可以隱藏按鈕，或者保留方便滑鼠點擊 */
+        @media (min-height: 800px) {
+            canvas { max-height: 500px; }
         }
     </style>
 </head>
 <body>
 
-    <h1>🐔 小雞過馬路遊戲</h1>
-    <canvas id="gameCanvas" width="600" height="400"></canvas>
-    <div class="instructions">
-        🎮 玩法：點擊畫面後，使用鍵盤的【上、下、左、右】方向鍵移動。<br>
-        🏁 目標：避開車輛，讓小雞安全抵達對面的草地！
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+
+    <div id="mobile-controls">
+        <div class="btn-row">
+            <button class="control-btn" id="btn-up">⬆️</button>
+        </div>
+        <div class="btn-row">
+            <button class="control-btn" id="btn-left">⬅️</button>
+            <button class="control-btn" id="btn-down">⬇️</button>
+            <button class="control-btn" id="btn-right">➡️</button>
+        </div>
     </div>
 
     <script>
@@ -51,47 +91,57 @@
         let lives = 3;
         let isGameOver = false;
 
-        // 定義小雞 (玩家)
+        // 定義小雞 (玩家)，因應畫布變寬，起點置中
         const player = {
-            x: 280,
+            x: 390, 
             y: 360,
             width: 20,
             height: 20,
-            color: "#FFD700", // 黃色
-            speed: 20 // 每次移動的距離
+            color: "#FFD700", 
+            speed: 20 
         };
 
-        // 定義馬路上的車輛
+        // 定義馬路上的車輛 (加寬畫布，增加車輛分散度)
         const carWidth = 40;
         const carHeight = 20;
         const lanes = [
-            { y: 300, speed: 2.5, dir: 1, color: '#FF4500', cars: [{x: 0}, {x: 250}, {x: 500}] },     // 第一車道 (向右)
-            { y: 240, speed: 3.5, dir: -1, color: '#1E90FF', cars: [{x: 100}, {x: 350}] },           // 第二車道 (向左)
-            { y: 180, speed: 2.0, dir: 1, color: '#8A2BE2', cars: [{x: 50}, {x: 200}, {x: 400}] },   // 第三車道 (向右)
-            { y: 120, speed: 4.5, dir: -1, color: '#FF1493', cars: [{x: 150}, {x: 450}] }            // 第四車道 (向左)
+            { y: 300, speed: 2.5, dir: 1, color: '#FF4500', cars: [{x: 0}, {x: 300}, {x: 600}] },
+            { y: 240, speed: 3.5, dir: -1, color: '#1E90FF', cars: [{x: 100}, {x: 400}, {x: 700}] },
+            { y: 180, speed: 2.0, dir: 1, color: '#8A2BE2', cars: [{x: 50}, {x: 250}, {x: 500}] },
+            { y: 120, speed: 4.5, dir: -1, color: '#FF1493', cars: [{x: 200}, {x: 550}] }
         ];
 
-        // 監聽鍵盤按鍵事件
+        // --- 移動邏輯 ---
+        function moveUp() { if (!isGameOver && player.y > 0) player.y -= player.speed; }
+        function moveDown() { if (!isGameOver && player.y < canvas.height - player.height) player.y += player.speed; }
+        function moveLeft() { if (!isGameOver && player.x > 0) player.x -= player.speed; }
+        function moveRight() { if (!isGameOver && player.x < canvas.width - player.width) player.x += player.speed; }
+
+        // --- 電腦鍵盤控制 ---
         document.addEventListener("keydown", (e) => {
-            if (isGameOver) {
-                if (e.key === "Enter") resetGame();
-                return;
-            }
+            if (isGameOver && e.key === "Enter") return resetGame();
+            if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.code) > -1) e.preventDefault();
+            
+            if (e.key === "ArrowUp") moveUp();
+            if (e.key === "ArrowDown") moveDown();
+            if (e.key === "ArrowLeft") moveLeft();
+            if (e.key === "ArrowRight") moveRight();
+        });
 
-            // 防止預設的網頁捲動
-            if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.code) > -1) {
-                e.preventDefault();
-            }
+        // --- 手機虛擬按鈕控制 (使用 pointerdown 支援滑鼠與觸控) ---
+        document.getElementById("btn-up").addEventListener("pointerdown", moveUp);
+        document.getElementById("btn-down").addEventListener("pointerdown", moveDown);
+        document.getElementById("btn-left").addEventListener("pointerdown", moveLeft);
+        document.getElementById("btn-right").addEventListener("pointerdown", moveRight);
 
-            if (e.key === "ArrowUp" && player.y > 0) player.y -= player.speed;
-            if (e.key === "ArrowDown" && player.y < canvas.height - player.height) player.y += player.speed;
-            if (e.key === "ArrowLeft" && player.x > 0) player.x -= player.speed;
-            if (e.key === "ArrowRight" && player.x < canvas.width - player.width) player.x += player.speed;
+        // --- 點擊遊戲畫面重新開始 ---
+        canvas.addEventListener("pointerdown", () => {
+            if (isGameOver) resetGame();
         });
 
         // 重置玩家位置
         function resetPlayer() {
-            player.x = 280;
+            player.x = 390;
             player.y = 360;
         }
 
@@ -100,6 +150,9 @@
             score = 0;
             lives = 3;
             isGameOver = false;
+            // 重置車速
+            lanes[0].speed = 2.5; lanes[1].speed = 3.5;
+            lanes[2].speed = 2.0; lanes[3].speed = 4.5;
             resetPlayer();
         }
 
@@ -107,46 +160,39 @@
         function update() {
             if (isGameOver) return;
 
-            // 移動車輛
+            // 移動車輛與碰撞偵測
             lanes.forEach(lane => {
                 lane.cars.forEach(car => {
                     car.x += lane.speed * lane.dir;
                     
-                    // 讓車輛在畫面中循環
                     if (lane.dir === 1 && car.x > canvas.width) car.x = -carWidth;
                     if (lane.dir === -1 && car.x < -carWidth) car.x = canvas.width;
 
-                    // 碰撞偵測 (AABB 邊界盒碰撞)
                     if (player.x < car.x + carWidth &&
                         player.x + player.width > car.x &&
                         player.y < lane.y + carHeight &&
                         player.y + player.height > lane.y) {
                         
-                        // 撞到車了
                         lives--;
                         resetPlayer();
-                        if (lives <= 0) {
-                            isGameOver = true;
-                        }
+                        if (lives <= 0) isGameOver = true;
                     }
                 });
             });
 
-            // 抵達終點 (對面的草地)
+            // 抵達終點
             if (player.y < 80) {
                 score += 10;
                 resetPlayer();
-                // 過關後稍微增加一點車速來提升難度
-                lanes.forEach(lane => lane.speed += 0.2);
+                lanes.forEach(lane => lane.speed += 0.3); // 難度提升
             }
         }
 
         // 繪製遊戲畫面
         function draw() {
-            // 清除畫布
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 畫馬路 (深灰色)
+            // 畫馬路
             ctx.fillStyle = "#555";
             ctx.fillRect(0, 100, canvas.width, 240);
 
@@ -162,42 +208,41 @@
             lanes.forEach(lane => {
                 ctx.fillStyle = lane.color;
                 lane.cars.forEach(car => {
-                    // 畫車身
                     ctx.fillRect(car.x, lane.y, carWidth, carHeight);
-                    // 畫車窗 (簡單裝飾)
                     ctx.fillStyle = "rgba(255,255,255,0.6)";
                     ctx.fillRect(car.x + (lane.dir === 1 ? 25 : 5), lane.y + 2, 10, 16);
-                    ctx.fillStyle = lane.color; // 顏色改回來
+                    ctx.fillStyle = lane.color; 
                 });
             });
 
-            // 畫小雞 (玩家)
+            // 畫小雞
             ctx.fillStyle = player.color;
             ctx.fillRect(player.x, player.y, player.width, player.height);
-            // 小雞的嘴巴 (紅色點綴)
             ctx.fillStyle = "red";
             ctx.fillRect(player.x + 5, player.y - 4, 10, 4);
 
-            // 畫介面 (分數與生命)
+            // 畫介面
             ctx.fillStyle = "black";
-            ctx.font = "20px Arial";
-            ctx.fillText("⭐ 分數: " + score, 15, 35);
+            ctx.font = "24px '微軟正黑體', sans-serif";
+            ctx.fillText("⭐ 分數: " + score, 20, 40);
             
-            // 畫生命值(愛心)
             let hearts = "";
             for(let i=0; i<lives; i++) hearts += "❤️";
-            ctx.fillText("生命: " + hearts, canvas.width - 150, 35);
+            ctx.fillText("生命: " + hearts, canvas.width - 180, 40);
 
             // 遊戲結束畫面
             if (isGameOver) {
                 ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = "white";
-                ctx.font = "40px Arial";
-                ctx.fillText("遊戲結束！", 200, 180);
-                ctx.font = "20px Arial";
-                ctx.fillText("最終分數: " + score, 235, 230);
-                ctx.fillText("按下 [Enter] 鍵重新開始", 195, 280);
+                ctx.font = "bold 48px '微軟正黑體', sans-serif";
+                ctx.textAlign = "center"; // 文字置中對齊
+                ctx.fillText("遊戲結束！", canvas.width / 2, 180);
+                ctx.font = "24px '微軟正黑體', sans-serif";
+                ctx.fillText("最終分數: " + score, canvas.width / 2, 240);
+                // 提示改為點擊畫面
+                ctx.fillText("點擊遊戲畫面重新開始", canvas.width / 2, 300);
+                ctx.textAlign = "left"; // 恢復預設對齊方式
             }
         }
 
