@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小雞過馬路 - 網頁版</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #87CEEB; /* 天空藍背景 */
+            font-family: '微軟正黑體', sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-shadow: 2px 2px white;
+        }
+        canvas {
+            background-color: #7CFC00; /* 草地綠背景 */
+            box-shadow: 0px 5px 15px rgba(0,0,0,0.5);
+            border-radius: 10px;
+            border: 4px solid #fff;
+        }
+        .instructions {
+            margin-top: 15px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🐔 小雞過馬路遊戲</h1>
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+    <div class="instructions">
+        🎮 玩法：點擊畫面後，使用鍵盤的【上、下、左、右】方向鍵移動。<br>
+        🏁 目標：避開車輛，讓小雞安全抵達對面的草地！
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // 遊戲狀態與參數
+        let score = 0;
+        let lives = 3;
+        let isGameOver = false;
+
+        // 定義小雞 (玩家)
+        const player = {
+            x: 280,
+            y: 360,
+            width: 20,
+            height: 20,
+            color: "#FFD700", // 黃色
+            speed: 20 // 每次移動的距離
+        };
+
+        // 定義馬路上的車輛
+        const carWidth = 40;
+        const carHeight = 20;
+        const lanes = [
+            { y: 300, speed: 2.5, dir: 1, color: '#FF4500', cars: [{x: 0}, {x: 250}, {x: 500}] },     // 第一車道 (向右)
+            { y: 240, speed: 3.5, dir: -1, color: '#1E90FF', cars: [{x: 100}, {x: 350}] },           // 第二車道 (向左)
+            { y: 180, speed: 2.0, dir: 1, color: '#8A2BE2', cars: [{x: 50}, {x: 200}, {x: 400}] },   // 第三車道 (向右)
+            { y: 120, speed: 4.5, dir: -1, color: '#FF1493', cars: [{x: 150}, {x: 450}] }            // 第四車道 (向左)
+        ];
+
+        // 監聽鍵盤按鍵事件
+        document.addEventListener("keydown", (e) => {
+            if (isGameOver) {
+                if (e.key === "Enter") resetGame();
+                return;
+            }
+
+            // 防止預設的網頁捲動
+            if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.code) > -1) {
+                e.preventDefault();
+            }
+
+            if (e.key === "ArrowUp" && player.y > 0) player.y -= player.speed;
+            if (e.key === "ArrowDown" && player.y < canvas.height - player.height) player.y += player.speed;
+            if (e.key === "ArrowLeft" && player.x > 0) player.x -= player.speed;
+            if (e.key === "ArrowRight" && player.x < canvas.width - player.width) player.x += player.speed;
+        });
+
+        // 重置玩家位置
+        function resetPlayer() {
+            player.x = 280;
+            player.y = 360;
+        }
+
+        // 重新開始遊戲
+        function resetGame() {
+            score = 0;
+            lives = 3;
+            isGameOver = false;
+            resetPlayer();
+        }
+
+        // 遊戲邏輯更新
+        function update() {
+            if (isGameOver) return;
+
+            // 移動車輛
+            lanes.forEach(lane => {
+                lane.cars.forEach(car => {
+                    car.x += lane.speed * lane.dir;
+                    
+                    // 讓車輛在畫面中循環
+                    if (lane.dir === 1 && car.x > canvas.width) car.x = -carWidth;
+                    if (lane.dir === -1 && car.x < -carWidth) car.x = canvas.width;
+
+                    // 碰撞偵測 (AABB 邊界盒碰撞)
+                    if (player.x < car.x + carWidth &&
+                        player.x + player.width > car.x &&
+                        player.y < lane.y + carHeight &&
+                        player.y + player.height > lane.y) {
+                        
+                        // 撞到車了
+                        lives--;
+                        resetPlayer();
+                        if (lives <= 0) {
+                            isGameOver = true;
+                        }
+                    }
+                });
+            });
+
+            // 抵達終點 (對面的草地)
+            if (player.y < 80) {
+                score += 10;
+                resetPlayer();
+                // 過關後稍微增加一點車速來提升難度
+                lanes.forEach(lane => lane.speed += 0.2);
+            }
+        }
+
+        // 繪製遊戲畫面
+        function draw() {
+            // 清除畫布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 畫馬路 (深灰色)
+            ctx.fillStyle = "#555";
+            ctx.fillRect(0, 100, canvas.width, 240);
+
+            // 畫馬路上的分隔線
+            ctx.fillStyle = "white";
+            for (let i = 0; i < canvas.width; i += 40) {
+                ctx.fillRect(i, 160, 20, 2);
+                ctx.fillRect(i, 220, 20, 2);
+                ctx.fillRect(i, 280, 20, 2);
+            }
+
+            // 畫車輛
+            lanes.forEach(lane => {
+                ctx.fillStyle = lane.color;
+                lane.cars.forEach(car => {
+                    // 畫車身
+                    ctx.fillRect(car.x, lane.y, carWidth, carHeight);
+                    // 畫車窗 (簡單裝飾)
+                    ctx.fillStyle = "rgba(255,255,255,0.6)";
+                    ctx.fillRect(car.x + (lane.dir === 1 ? 25 : 5), lane.y + 2, 10, 16);
+                    ctx.fillStyle = lane.color; // 顏色改回來
+                });
+            });
+
+            // 畫小雞 (玩家)
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            // 小雞的嘴巴 (紅色點綴)
+            ctx.fillStyle = "red";
+            ctx.fillRect(player.x + 5, player.y - 4, 10, 4);
+
+            // 畫介面 (分數與生命)
+            ctx.fillStyle = "black";
+            ctx.font = "20px Arial";
+            ctx.fillText("⭐ 分數: " + score, 15, 35);
+            
+            // 畫生命值(愛心)
+            let hearts = "";
+            for(let i=0; i<lives; i++) hearts += "❤️";
+            ctx.fillText("生命: " + hearts, canvas.width - 150, 35);
+
+            // 遊戲結束畫面
+            if (isGameOver) {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "white";
+                ctx.font = "40px Arial";
+                ctx.fillText("遊戲結束！", 200, 180);
+                ctx.font = "20px Arial";
+                ctx.fillText("最終分數: " + score, 235, 230);
+                ctx.fillText("按下 [Enter] 鍵重新開始", 195, 280);
+            }
+        }
+
+        // 遊戲主迴圈
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 啟動遊戲
+        gameLoop();
+    </script>
+</body>
+</html>
